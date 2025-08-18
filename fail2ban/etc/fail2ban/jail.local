@@ -15,8 +15,8 @@ bantime  = 86400
 enabled   = true
 port      = http,https
 filter    = scraper-anthropic-abuse
-logpath   = /var/log/apache2/access.log
-            /var/log/nginx/access.log
+logpath   = /var/log/apache2/*access.log
+            /var/log/nginx/*access.log
 maxretry  = 3
 findtime  = 600
 bantime   = 3600

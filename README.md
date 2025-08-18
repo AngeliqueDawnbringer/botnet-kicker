@@ -125,17 +125,25 @@ ignoreregex =
 
 3. Testing for matches
 ## Test against Apache
+```bash
 sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/anthropic-any.conf
+```
 
 ## Test against Nginx
+```bash
 sudo fail2ban-regex /var/log/nginx/access.log /etc/fail2ban/filter.d/anthropic-any.conf
+```
 
 ## Enable the jail (optional)
+```bash
 sudo sed -i 's/^enabled\s*=.*/enabled = true/' /etc/fail2ban/jail.local
 sudo systemctl restart fail2ban
+```
 
 ## Verify
+```bash
 sudo fail2ban-client status anthropic-any
+```
 
 5. Restart Fail2ban:
 

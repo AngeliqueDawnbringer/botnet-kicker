@@ -1,46 +1,102 @@
-# parser.sh  
-### Parser for Fail2ban Logs & Jails
+# Botnet Kicker
 
-`parser.sh` is a log and jail parser that enriches your **Fail2ban** bans with **ASN (Autonomous System Number)** and **BGP prefix data** from **Team Cymru**.  
-It then generates **summaries, blocklists, and actionable recommendations** so you can apply bans at the **ASN** or **prefix** level, not just per-IP.
+> Tools to eradicate attackers the hard way.  
+> Built around Fail2ban jails, Team Cymru IP → ASN lookups, and aggressive perimeter blocking.
 
----
+## Disclosure & Warning
 
-## Features
+These scripts were hacked together during long days of fighting off garbage traffic, brute force attempts, signup abuse, and botnets.  
+They take aggressive action against offending IPs, subnets, and entire ASNs if thresholds are met.
 
-- Parses Fail2ban jail **status** and **banned IP list**.  
-- Enriches IPs with ASN, AS Name, BGP prefix, country, and allocation date via [Team Cymru IP → ASN service](https://team-cymru.com/community-services/ip-asn-mapping/).  
-- Generates:
-  - `ips_enriched.csv` (per-IP with ASN & prefix info)
-  - `asn_summary.csv` (all ASNs, counts)
-  - `prefixes.txt` (unique prefixes)
-  - `prefixes_annotated.txt` (prefixes with ASN + hit counts)
-  - `asn_blocklist.txt` & `asn_blocklist_only.txt`
-  - `recommendations.txt` (human-readable next steps)  
-- Recommendations include:
-  - ASN-level WAF/CDN blocklists
-  - Prefix blocklists (`ipset` + `iptables`) with **24h auto-expire**
-  - Temporary single-IP drops with **24h auto-expire**
-  - Inline annotations:  
-    `reason=fail2ban:<jail>`  
-    `asn=AS12345 <AS Name>`
-- Color-coded console output (using `tput`, safe for terminals).
+Use at your own risk:  
+- You will block real networks if thresholds are too low.  
+- You might cut off legit traffic (false positives happen).  
+- You should review all recommendation files before applying blindly.  
+- This repo is not about elegance. It is about results.
 
----
+In short:  
+This is a blunt instrument to kill botnets the hard way.
+
+## Components
+
+### f2b-cymru-ban.sh
+- Core parser for Fail2ban jails.  
+- Enriches banned IPs via Team Cymru WHOIS service.  
+- Produces:
+  - list_ips.txt (raw IPs)  
+  - list_prefixes.txt (aggregated subnets)  
+  - list_asn_prefixes.txt (ASNs with their ranges)  
+  - recommendations.txt (human-readable blocklist guidance)  
+  - apply_cmds.sh (ready-to-run firewall commands)
+
+Modes:  
+- --mode ip → Block individual IPs  
+- --mode prefix → Block subnets with many offenders  
+- --mode asn → Block entire ASNs meeting thresholds  
+
+Flags:  
+- --apply → Immediately apply bans  
+- --asn-ban → Enable ASN-wide blocking if:
+  - ≥ 10 offending IPs total, and  
+  - ≥ 2 distinct ranges, and  
+  - ASN not located in Sweden (SE by default exclusion)  
+
+### eradicate-all-attackers.sh
+- Wrapper to run f2b-cymru-ban.sh across all active jails.  
+- Generates per-jail reports under ./f2b_eradic_run/<jail>/.  
+- Runs in modes (ip, prefix, asn) with --apply optional.  
+- Provides a run summary at the end.
+
+Example:
+
+    sudo ./eradicate-all-attackers.sh --mode prefix --apply
+
+### f2b-jailstatus-dump.sh
+- Dumps fail2ban-client status <jail> into per-jail logs.  
+- Default output dir: /var/www/html/log/  
+- Creates one file per jail: <jail>.log.  
+- Useful for serving live jail status over HTTP.  
+
+Crontab example (run every 5 min, quiet):  
+
+    */5 * * * * root /usr/local/bin/f2b-jailstatus-dump.sh >/dev/null 2>&1
+
+## Usage Workflow
+
+1. Ensure Fail2ban is running with relevant jails (sshd, apache-*, etc).  
+2. Run f2b-cymru-ban.sh against one jail for testing.  
+3. Review output in recommendations.txt.  
+4. Apply bans manually or with --apply.  
+5. Automate with eradicate-all-attackers.sh if confident.  
+6. (Optional) Serve jail status logs via f2b-jailstatus-dump.sh.
 
 ## Requirements
+- fail2ban-client  
+- ipset + iptables (preferred)  
+- or ufw as fallback (not default in current build)  
+- awk, sed, curl, bash  
 
-- **Linux / Unix shell**
-- **Fail2ban** (`fail2ban-client`)
-- **nc (netcat)** *or* `whois` (to query Team Cymru)
-- **awk, sed, grep, sort, join** (standard GNU tools)
-- **iptables + ipset** (for applying firewall actions)
+## Example Outputs
 
----
+Recommendations:
 
-## Usage
+    1) Block high-volume ASNs (>= 5 IPs).
+       AS207990 # HR-CUSTOMER (count=500)
 
-```bash
-./parser.sh <jail-name> [outdir] [min_prefix_count] [min_asn_count]
+    2) Block attack networks by prefix (>= 5 IPs).
+       161.123.131.0/24
+       154.73.249.0/24
 
-sudo ./parser.sh apache-signup-abuse
+Apply Script:
+
+    ipset create f2b_prefixes hash:net -exist
+    ipset add f2b_prefixes 154.73.249.0/24 timeout 86400
+    iptables -I INPUT -m set --match-set f2b_prefixes src -j DROP
+
+## License
+Do whatever you want.  
+Just don’t complain if you shoot yourself in the foot.  
+
+## Author
+Angelique Dawnbringer  
+https://github.com/AngeliqueDawnbringer

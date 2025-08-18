@@ -20,3 +20,14 @@ logpath   = /var/log/apache2/*access.log
 maxretry  = 3
 findtime  = 600
 bantime   = 3600
+
+[scraper-anthropic-any]
+enabled   = false
+port      = http,https
+filter    = anthropic-any
+logpath   = /var/log/apache2/access.log
+           /var/log/nginx/access.log
+# Ban immediately on first sighting, tune as you prefer:
+maxretry  = 1
+findtime  = 600
+bantime   = 3600

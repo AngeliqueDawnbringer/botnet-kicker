@@ -1,0 +1,12 @@
+[DEFAULT]
+#Add IPs to ignore
+ignoreip = 127.0.0.1/8 ::1 88.88.88.88
+
+[apache-signup-abuse]
+enabled = true
+port    = http,https
+filter  = apache-signup-abuse
+logpath = /var/log/apache2/*access.log
+maxretry = 5
+findtime = 60
+bantime  = 86400

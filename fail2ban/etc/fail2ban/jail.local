@@ -31,3 +31,59 @@ logpath   = /var/log/apache2/access.log
 maxretry  = 1
 findtime  = 600
 bantime   = 3600
+
+
+
+# ===========================================================
+# Debian/Ubuntu LAMP Defaults
+# -----------------------------------------------------------
+# This file only enables common LAMP-related jails.
+# Configuration (filters, ports, log paths) stays in jail.conf,
+# so you still benefit from package updates.
+#
+# Usage:
+#   sudo systemctl reload fail2ban
+#   sudo fail2ban-client status
+# ===========================================================
+
+[sshd]
+enabled = true
+# Protects SSH login attempts.
+# Logs: /var/log/auth.log
+# Blocks brute force password guessing and repeated failed logins.
+
+[apache-auth]
+enabled = true
+# Protects Apache authentication areas (HTTP Basic/Digest Auth).
+# Logs: /var/log/apache2/error.log
+# Bans IPs after repeated failed logins to protected directories.
+
+[apache-badbots]
+enabled = true
+# Blocks known bad/crawler user-agents (from badbots filter list).
+# Logs: /var/log/apache2/access.log
+# Catches aggressive scrapers, spam bots, and malicious scanners.
+
+[apache-noscript]
+enabled = true
+# Blocks requests trying to access non-script files as if they were scripts.
+# Example: accessing /etc/passwd or .php files in non-PHP directories.
+# Logs: /var/log/apache2/error.log
+
+[apache-overflows]
+enabled = true
+# Protects against buffer overflow attempts in HTTP requests.
+# Logs: /var/log/apache2/error.log
+# Catches suspiciously long requests, common in exploit attempts.
+
+[apache-nohome]
+enabled = true
+# Blocks requests to /~user directories when they don’t exist.
+# Logs: /var/log/apache2/error.log
+# Attackers probe these for weak setups and old PHP shells.
+
+[mysqld-auth]
+enabled = false
+# Protects MySQL against brute force login attempts.
+# Logs: /var/log/mysql/error.log (on Debian/Ubuntu)
+# Bans IPs with repeated failed authentication.

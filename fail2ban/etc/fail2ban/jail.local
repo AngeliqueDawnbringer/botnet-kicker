@@ -10,3 +10,13 @@ logpath = /var/log/apache2/*access.log
 maxretry = 5
 findtime = 60
 bantime  = 86400
+
+[scraper-anthropic-abuse]
+enabled   = true
+port      = http,https
+filter    = scraper-anthropic-abuse
+logpath   = /var/log/apache2/access.log
+            /var/log/nginx/access.log
+maxretry  = 3
+findtime  = 600
+bantime   = 3600

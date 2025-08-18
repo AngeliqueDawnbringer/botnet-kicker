@@ -124,6 +124,7 @@ ignoreregex =
 ```
 
 3. Testing for matches
+
 3a. Test against Apache
 ```bash
 sudo fail2ban-regex /var/log/apache2/access.log /etc/fail2ban/filter.d/anthropic-any.conf

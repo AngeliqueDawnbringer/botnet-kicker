@@ -32,7 +32,7 @@ else
 fi
 
 JAIL="${1:-}"
-OUTDIR="${2:-./f2b_recommendations}"
+OUTDIR="${2:-./f2b-asn-report}"
 MIN_PREFIX_COUNT="${3:-5}"
 MIN_ASN_COUNT="${4:-5}"
 

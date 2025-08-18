@@ -16,7 +16,7 @@ awk '
     if (NR % 10 == 0) {
         system("sleep 1")
     }
-}' output.txt
+}' log-to-replay.txt
 ```
 
 ---

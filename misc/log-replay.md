@@ -23,7 +23,7 @@ awk '
 
 ## How It Works
 
-1. Reads lines from `output.txt` (your saved logs).  
+1. Reads lines from `log-to-replay.txt` (your previous saved logs).  
 2. Writes each line into `apache2/access.log`.  
 3. Flushes output so it becomes visible to tools immediately.  
 4. Every 10 lines, sleeps for 1 second before continuing.  

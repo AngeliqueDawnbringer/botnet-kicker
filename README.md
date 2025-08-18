@@ -1,21 +1,20 @@
 # Botnet Kicker
 
-> Tools to eradicate attackers the hard way.  
-> Built around Fail2ban jails, Team Cymru IP → ASN lookups, and aggressive perimeter blocking.
+Tools to eradicate attackers the hard way.  
+Built around Fail2ban jails, Team Cymru IP → ASN lookups, and aggressive perimeter blocking.
 
 ## Disclosure & Warning
 
-These scripts were hacked together during long days of fighting off garbage traffic, brute force attempts, signup abuse, and botnets.  
+These scripts were coded quickly during active defense against botnets and abuse traffic.  
 They take aggressive action against offending IPs, subnets, and entire ASNs if thresholds are met.
 
 Use at your own risk:  
 - You will block real networks if thresholds are too low.  
-- You might cut off legit traffic (false positives happen).  
-- You should review all recommendation files before applying blindly.  
-- This repo is not about elegance. It is about results.
+- You might cut off legitimate traffic.  
+- You should always review recommendation files before applying.  
+- This repository is about effectiveness, not elegance.
 
-In short:  
-This is a blunt instrument to kill botnets the hard way.
+This is a blunt instrument to stop botnets.
 
 ## Components
 
@@ -26,8 +25,8 @@ This is a blunt instrument to kill botnets the hard way.
   - list_ips.txt (raw IPs)  
   - list_prefixes.txt (aggregated subnets)  
   - list_asn_prefixes.txt (ASNs with their ranges)  
-  - recommendations.txt (human-readable blocklist guidance)  
-  - apply_cmds.sh (ready-to-run firewall commands)
+  - recommendations.txt (blocklist guidance)  
+  - apply_cmds.sh (firewall commands)
 
 Modes:  
 - --mode ip → Block individual IPs  
@@ -37,29 +36,33 @@ Modes:
 Flags:  
 - --apply → Immediately apply bans  
 - --asn-ban → Enable ASN-wide blocking if:
-  - ≥ 10 offending IPs total, and  
-  - ≥ 2 distinct ranges, and  
-  - ASN not located in Sweden (SE by default exclusion)  
+  - At least 10 offending IPs total  
+  - At least 2 distinct ranges  
+  - ASN not located in Sweden (SE excluded by default)  
 
 ### eradicate-all-attackers.sh
 - Wrapper to run f2b-cymru-ban.sh across all active jails.  
 - Generates per-jail reports under ./f2b_eradic_run/<jail>/.  
-- Runs in modes (ip, prefix, asn) with --apply optional.  
-- Provides a run summary at the end.
+- Runs in modes (ip, prefix, asn) with optional --apply.  
+- Provides a run summary.
 
 Example:
 
-    sudo ./eradicate-all-attackers.sh --mode prefix --apply
+```bash
+sudo ./eradicate-all-attackers.sh --mode prefix --apply
+```
 
 ### f2b-jailstatus-dump.sh
 - Dumps fail2ban-client status <jail> into per-jail logs.  
-- Default output dir: /var/www/html/log/  
-- Creates one file per jail: <jail>.log.  
-- Useful for serving live jail status over HTTP.  
+- Default output directory: /var/www/html/log/  
+- Creates one file per jail: <jail>.log  
+- Useful for serving jail status over HTTP.  
 
-Crontab example (run every 5 min, quiet):  
+Crontab example (run every 5 minutes):
 
-    */5 * * * * root /usr/local/bin/f2b-jailstatus-dump.sh >/dev/null 2>&1
+```bash
+*/5 * * * * root /usr/local/bin/f2b-jailstatus-dump.sh >/dev/null 2>&1
+```
 
 ## Usage Workflow
 
@@ -73,30 +76,58 @@ Crontab example (run every 5 min, quiet):
 ## Requirements
 - fail2ban-client  
 - ipset + iptables (preferred)  
-- or ufw as fallback (not default in current build)  
 - awk, sed, curl, bash  
 
 ## Example Outputs
 
 Recommendations:
 
-    1) Block high-volume ASNs (>= 5 IPs).
-       AS207990 # HR-CUSTOMER (count=500)
+```
+1) Block high-volume ASNs (>= 5 IPs).
+   AS207990 HR-CUSTOMER (count=500)
 
-    2) Block attack networks by prefix (>= 5 IPs).
-       161.123.131.0/24
-       154.73.249.0/24
+2) Block attack networks by prefix (>= 5 IPs).
+   161.123.131.0/24
+   154.73.249.0/24
+```
 
 Apply Script:
 
-    ipset create f2b_prefixes hash:net -exist
-    ipset add f2b_prefixes 154.73.249.0/24 timeout 86400
-    iptables -I INPUT -m set --match-set f2b_prefixes src -j DROP
+```bash
+ipset create f2b_prefixes hash:net -exist
+ipset add f2b_prefixes 154.73.249.0/24 timeout 86400
+iptables -I INPUT -m set --match-set f2b_prefixes src -j DROP
+```
 
-## License
-Do whatever you want.  
-Just don’t complain if you shoot yourself in the foot.  
+## Making it Effective
 
-## Author
-Angelique Dawnbringer  
-https://github.com/AngeliqueDawnbringer
+For Fail2ban to produce useful input, you must configure jails and filters.
+
+1. Create a custom jail.local in `/etc/fail2ban/jail.local`. Example:
+
+```ini
+[apache-signup-abuse]
+enabled  = true
+port     = http,https
+filter   = apache-signup-abuse
+logpath  = /var/log/apache2/access.log
+maxretry = 3
+bantime  = 3600
+```
+
+2. Create a matching filter in `/etc/fail2ban/filter.d/apache-signup-abuse.conf`:
+
+```ini
+[Definition]
+failregex = ^<HOST> .* "POST /signup
+ignoreregex =
+```
+
+3. Restart Fail2ban:
+
+```bash
+sudo systemctl restart fail2ban
+```
+
+Once the jail and filter are active, Fail2ban will feed IPs into the jail.  
+That becomes the input for `f2b-cymru-ban.sh` and `eradicate-all-attackers.sh`.

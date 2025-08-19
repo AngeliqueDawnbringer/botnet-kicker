@@ -1,16 +1,23 @@
 findip() {
-  local ip="$1"
+  local query="$1"
   local found=0
 
-  if [[ -z "$ip" ]]; then
-    echo "Usage: findip <ip-or-ipv6>"
+  if [[ -z "$query" ]]; then
+    echo "Usage: findip <ip-or-pattern>"
+    echo "Examples:"
+    echo "  findip 203.0.113.42     # exact"
+    echo "  findip 203.0.113.       # partial"
+    echo "  findip '2001:db8::'    # IPv6 prefix"
+    echo "  findip '203\\.0\\.113\\.[0-9]*'  # regex"
     return 2
   fi
 
   echo "== Checking ipset membership =="
   for set in $(sudo ipset list -name 2>/dev/null); do
-    if sudo ipset test "$set" "$ip" &>/dev/null; then
-      echo "✓ $ip is in ipset: $set"
+    matches=$(sudo ipset list "$set" | awk '/Members:/,/^$/' | tail -n +2 | grep -E "$query" | sort -V || true)
+    if [[ -n "$matches" ]]; then
+      echo "✓ Found in $set:"
+      echo "$matches" | sed 's/^/   /'
       found=1
     fi
   done
@@ -23,13 +30,15 @@ findip() {
   jails=$(printf '%s\n' "$jails_raw" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed '/^$/d')
 
   for jail in $jails; do
-    if sudo fail2ban-client get "$jail" banip 2>/dev/null | tr ' ' '\n' | grep -Fxq "$ip"; then
-      echo "✓ $ip is banned in jail: $jail"
+    matches=$(sudo fail2ban-client get "$jail" banip 2>/dev/null | tr ' ' '\n' | grep -E "$query" | sort -V || true)
+    if [[ -n "$matches" ]]; then
+      echo "✓ Found in jail $jail:"
+      echo "$matches" | sed 's/^/   /'
       found=1
     fi
   done
 
   if [[ $found -eq 0 ]]; then
-    echo "✗ $ip not found in any ipset or jail."
+    echo "✗ No match for pattern: $query"
   fi
 }

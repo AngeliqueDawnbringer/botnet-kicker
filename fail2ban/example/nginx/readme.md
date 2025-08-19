@@ -69,7 +69,7 @@ In any `server { ... }` where you want to return a message for *bad* requests:
 if ($anthropic_bad) {
     add_header Cache-Control "no-store" always;
     default_type text/plain;
-    return 200 "Stop scraping. Identify your client as Anthropic.\n";
+    return 403 "Stop scraping. Identify your client as Anthropic.\n";
 }
 ```
 

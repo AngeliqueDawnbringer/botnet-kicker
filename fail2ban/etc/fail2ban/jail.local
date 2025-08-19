@@ -5,6 +5,7 @@ ignoreip = 127.0.0.1/8 ::1 88.88.88.88
 #banaction = ipset-iptables
 #banaction_allports = ipset-iptables
 
+# Demo Rule to teach you how to create jails
 [apache-signup-abuse]
 enabled = true
 port    = http,https
@@ -14,6 +15,7 @@ maxretry = 5
 findtime = 60
 bantime  = 86400
 
+# Demo rule to teach how to ban a user-agent generating 400|500
 [scraper-anthropic-abuse]
 enabled   = true
 port      = http,https
@@ -24,6 +26,7 @@ maxretry  = 3
 findtime  = 600
 bantime   = 3600
 
+# Demo rule to teach how to ban a user-agent period
 [scraper-anthropic-any]
 enabled   = false
 port      = http,https
@@ -35,6 +38,7 @@ maxretry  = 1
 findtime  = 600
 bantime   = 3600
 
+# Demo how you can make a ML-output be consumed (requires training on clean traffic too e.g. before attack
 # /etc/fail2ban/jail.d/web-detector.local
 [web-detector]
 # My custom machine learning model outputting files to jsonl

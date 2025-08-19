@@ -41,7 +41,7 @@ bantime   = 3600      # 1h ban
 [scraper-anthropic-any]
 enabled   = false
 port      = http,https
-filter    = anthropic-any
+filter    = scraper-anthropic-any
 logpath   = /var/log/apache2/access.log
             /var/log/nginx/access.log
 maxretry  = 1         # Ban on first sighting

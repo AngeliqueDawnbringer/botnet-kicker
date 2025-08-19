@@ -1,6 +1,9 @@
 [DEFAULT]
-#Add ips to ignore
+# Add ips here to ignore and safeguard so you dont lock yourself out
 ignoreip = 127.0.0.1/8 ::1 88.88.88.88
+# If you want to use my custom ipset tool, which is much faster on heavy traffic machines
+#banaction = ipset-iptables
+#banaction_allports = ipset-iptables
 
 [apache-signup-abuse]
 enabled = true

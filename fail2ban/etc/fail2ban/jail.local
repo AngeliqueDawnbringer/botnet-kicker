@@ -87,3 +87,10 @@ enabled = false
 # Protects MySQL against brute force login attempts.
 # Logs: /var/log/mysql/error.log (on Debian/Ubuntu)
 # Bans IPs with repeated failed authentication.
+
+#[mysqld-auth]
+#enabled = true
+#logpath = /var/log/mysql/error.log
+# Protects MySQL against brute force login attempts.
+# Logs: /var/log/mysql/error.log (on Debian/Ubuntu)
+# Bans IPs with repeated failed authentication

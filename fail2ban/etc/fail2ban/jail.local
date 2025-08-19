@@ -1,70 +1,74 @@
 [DEFAULT]
-# Add ips here to ignore and safeguard so you dont lock yourself out
+# ===============================
+# Global defaults for all jails
+# ===============================
+
+# Add trusted IPs here (admin IPs, internal ranges, etc.) so you don’t get locked out.
 ignoreip = 127.0.0.1/8 ::1 88.88.88.88
-# If you want to use my custom ipset tool, which is much faster on heavy traffic machines
+
+# Banaction defines how Fail2ban applies bans.
+# ipset-iptables is faster and scales better on busy servers than plain iptables.
+# Uncomment to make it default globally:
 #banaction = ipset-iptables
 #banaction_allports = ipset-iptables
 
-# Demo Rule to teach you how to create jails
-[apache-signup-abuse]
-enabled = true
-port    = http,https
-filter  = apache-signup-abuse
-logpath = /var/log/apache2/*access.log
-maxretry = 5
-findtime = 60
-bantime  = 86400
 
-# Demo rule to teach how to ban a user-agent generating 400|500
+# ===============================
+# Demo / Example Jails
+# ===============================
+
+[apache-signup-abuse]
+enabled  = true
+port     = http,https
+filter   = apache-signup-abuse
+logpath  = /var/log/apache2/*access.log
+maxretry = 5          # Ban after 5 failed attempts
+findtime = 60         # within 1 minute
+bantime  = 86400      # 24h ban
+# Example: catching bots abusing signup forms
+
 [scraper-anthropic-abuse]
 enabled   = true
 port      = http,https
 filter    = scraper-anthropic-abuse
 logpath   = /var/log/apache2/*access.log
             /var/log/nginx/*access.log
-maxretry  = 3
-findtime  = 600
-bantime   = 3600
+maxretry  = 3         # Ban after 3 retries
+findtime  = 600       # within 10 minutes
+bantime   = 3600      # 1h ban
+# Example: ban scraper User-Agent if it causes 400/500 errors
 
-# Demo rule to teach how to ban a user-agent period
 [scraper-anthropic-any]
 enabled   = false
 port      = http,https
 filter    = anthropic-any
 logpath   = /var/log/apache2/access.log
-           /var/log/nginx/access.log
-# Ban immediately on first sighting, tune as you prefer:
-maxretry  = 1
+            /var/log/nginx/access.log
+maxretry  = 1         # Ban on first sighting
 findtime  = 600
 bantime   = 3600
+# Example: ban specific User-Agent regardless of behavior
+# Use with care: may catch legitimate clients if filter is too broad.
 
-# Demo how you can make a ML-output be consumed (requires training on clean traffic too e.g. before attack
-# /etc/fail2ban/jail.d/web-detector.local
 [web-detector]
-# My custom machine learning model outputting files to jsonl
-enabled = false
-filter = web-detector
-logpath = /var/log/web_suspects.jsonl
-# The following line can be adapted based on frequency
-#backend = polling
-bantime = 5h
-findtime = 15m
-# If IP is flagged as an anomaly twice...
-maxretry = 2 
+enabled   = false
+filter    = web-detector
+logpath   = /var/log/web_suspects.jsonl
+# backend   = polling     # Uncomment if log not updating via systemd/journald
+bantime   = 5h           # Ban for 5 hours
+findtime  = 15m          # Look at 15 min windows
+maxretry  = 2            # If IP flagged as anomaly twice → ban
 action    = ipset-iptables
+# Example: consuming logs from a ML detector writing JSONL output
+# Needs a matching filter in /etc/fail2ban/filter.d/web-detector.conf
 
 
-# ===========================================================
+# ===============================
 # Debian/Ubuntu LAMP Defaults
-# -----------------------------------------------------------
-# This file only enables common LAMP-related jails.
-# Configuration (filters, ports, log paths) stays in jail.conf,
-# so you still benefit from package updates.
-#
-# Usage:
-#   sudo systemctl reload fail2ban
-#   sudo fail2ban-client status
-# ===========================================================
+# ===============================
+# These are common prebuilt jails for typical services.
+# Most stay disabled unless explicitly turned on.
+# ===============================
 
 [sshd]
 enabled = true
@@ -74,43 +78,42 @@ enabled = true
 
 [apache-auth]
 enabled = true
-# Protects Apache authentication areas (HTTP Basic/Digest Auth).
+# Protects Apache HTTP Basic/Digest Auth.
 # Logs: /var/log/apache2/error.log
 # Bans IPs after repeated failed logins to protected directories.
 
 [apache-badbots]
 enabled = true
-# Blocks known bad/crawler user-agents (from badbots filter list).
+# Blocks known bad/crawler User-Agents (from badbots filter).
 # Logs: /var/log/apache2/access.log
 # Catches aggressive scrapers, spam bots, and malicious scanners.
 
 [apache-noscript]
 enabled = true
-# Blocks requests trying to access non-script files as if they were scripts.
-# Example: accessing /etc/passwd or .php files in non-PHP directories.
+# Blocks attempts to execute non-script files as scripts.
+# Example: requesting /etc/passwd or .php in non-PHP dirs.
 # Logs: /var/log/apache2/error.log
 
 [apache-overflows]
 enabled = true
 # Protects against buffer overflow attempts in HTTP requests.
 # Logs: /var/log/apache2/error.log
-# Catches suspiciously long requests, common in exploit attempts.
+# Detects very long suspicious requests.
 
 [apache-nohome]
 enabled = true
-# Blocks requests to /~user directories when they don’t exist.
+# Blocks requests to /~user directories that don’t exist.
 # Logs: /var/log/apache2/error.log
-# Attackers probe these for weak setups and old PHP shells.
+# Attackers often probe these for old shells or misconfigs.
 
 [mysqld-auth]
 enabled = false
 # Protects MySQL against brute force login attempts.
 # Logs: /var/log/mysql/error.log (on Debian/Ubuntu)
-# Bans IPs with repeated failed authentication.
+# Enable if exposing MySQL externally (not recommended).
+# Safer to firewall off MySQL from the internet entirely.
 
+# Alternate example (redundant with above):
 #[mysqld-auth]
 #enabled = true
 #logpath = /var/log/mysql/error.log
-# Protects MySQL against brute force login attempts.
-# Logs: /var/log/mysql/error.log (on Debian/Ubuntu)
-# Bans IPs with repeated failed authentication

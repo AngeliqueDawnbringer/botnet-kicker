@@ -32,6 +32,19 @@ maxretry  = 1
 findtime  = 600
 bantime   = 3600
 
+# /etc/fail2ban/jail.d/web-detector.local
+[web-detector]
+# My custom machine learning model outputting files to jsonl
+enabled = false
+filter = web-detector
+logpath = /var/log/web_suspects.jsonl
+# The following line can be adapted based on frequency
+#backend = polling
+bantime = 5h
+findtime = 15m
+# If IP is flagged as an anomaly twice...
+maxretry = 2 
+action    = ipset-iptables
 
 
 # ===========================================================

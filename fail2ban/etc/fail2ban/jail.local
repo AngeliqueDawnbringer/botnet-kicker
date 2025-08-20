@@ -50,6 +50,16 @@ bantime   = 3600
 # Example: ban specific User-Agent regardless of behavior
 # Use with care: may catch legitimate clients if filter is too broad.
 
+[scraper-anthropic-spoof]
+filter    = scraper-anthropic-spoof
+logpath   = /var/log/nginx/*access.log
+            /var/log/apache2/*access.log
+maxretry  = 1
+findtime  = 10m
+bantime   = 1h
+ignorecommand = /usr/local/bin/anthropic-lookup.sh <ip>
+banaction = ipset-iptables
+
 [web-detector]
 enabled   = false
 filter    = web-detector

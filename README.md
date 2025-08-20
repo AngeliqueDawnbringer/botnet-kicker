@@ -29,7 +29,7 @@ This is a blunt instrument to stop botnets.
   - apply_cmds.sh (firewall commands)
 
 Modes:  
-- --mode ip → Block individual IPs  
+- --mode ip → Block individual IPs for 24h. (Extending short-lived jails)
 - --mode prefix → Block subnets with many offenders  
 - --mode asn → Block entire ASNs meeting thresholds  
 

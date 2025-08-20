@@ -154,43 +154,143 @@ ENRICHED="$OUTDIR/ips_enriched.csv"
 ENRICH_COUNT=$(awk 'END{print NR-1}' "$ENRICHED")
 echo -e "${GREEN}[+] Enriched $ENRICH_COUNT IPs via Cymru.${NC}"
 
-# -------- 4) Materialize clean lists (NO pipelines writing into the apply script) --------
+
+# -------- 4) Materialize clean lists (with debug logging) --------
 LIST_IPS="$OUTDIR/list_ips.txt"
 LIST_PFX="$OUTDIR/list_prefixes.txt"
 LIST_ASN_PFX="$OUTDIR/list_asn_prefixes.txt"
+DEBUG_LOG="$OUTDIR/debug_parse.log"
+: > "$DEBUG_LOG"
 
-# IPs (one per line)
-awk -F',' 'NR>1 && $1 ~ /^[0-9.]+$/ {print $1}' "$ENRICHED" | sort -u > "$LIST_IPS"
+# Auto-detect delimiter from the FIRST DATA LINE (not the header)
+first_data_line="$(tail -n +2 "$ENRICHED" | head -n 1)"
+if printf '%s' "$first_data_line" | grep -q '|'; then
+  SEP_RE='\\|'   # FS regex for pipe
+  IPCOL=2        # pipe format: ASN | IP | PFX | CC | Registry | Alloc | AS Name
+  PFXCOL=3
+  FORMAT='pipe'
+else
+  SEP_RE=','     # FS regex for comma
+  IPCOL=1        # csv format: ip,asn,as_name,bgp_prefix,cc,allocated
+  PFXCOL=4
+  FORMAT='csv'
+fi
+echo "[debug] Using FS='$SEP_RE' (format=$FORMAT) IPCOL=$IPCOL PFXCOL=$PFXCOL" >> "$DEBUG_LOG"
 
-# Prefixes (one per line)
-awk -F',' 'NR>1 && $4 ~ /\/[0-9]+$/ {print $4}' "$ENRICHED" | sort -u > "$LIST_PFX"
+# ---- IP extraction
+awk -v FS="$SEP_RE" -v ipcol="$IPCOL" -v dbg="$DEBUG_LOG" '
+FNR==1 { next }
+{
+  s = $(ipcol)
+  raw = $0
+  gsub(/\xef\xbb\xbf|\xc2\xa0|\xe2\x80[\x8b\x8c]|\r/,"",s)
+  gsub(/[[:space:]]+/,"",s)
+  n = split(s,o,".")
+  if(n!=4){ print "[skip-ip] badsplit line="FNR" raw="raw >> dbg; next }
+  ok=1
+  for(i=1;i<=4;i++){ if(o[i]!~/^[0-9]+$/ || o[i]<0 || o[i]>255){ ok=0; break } }
+  if(!ok){ print "[skip-ip] invalid="s" raw="raw >> dbg; next }
+  if(length(s)>0) print s
+}' "$ENRICHED" | sort -u > "$LIST_IPS"
 
-# ASN mode: qualify ASNs and collect their prefixes
+# ---- Prefix extraction
+awk -v FS="$SEP_RE" -v pfxcol="$PFXCOL" -v dbg="$DEBUG_LOG" '
+FNR==1 { next }
+{
+  p = $(pfxcol)
+  raw = $0
+  gsub(/\xef\xbb\xbf|\xc2\xa0|\xe2\x80[\x8b\x8c]|\r/,"",p)
+  gsub(/[[:space:]]+/,"",p)
+  if(split(p,b,"/")!=2){ print "[skip-pfx] no-slash raw="raw >> dbg; next }
+  ip=b[1]; m=b[2]
+  if(m !~ /^[0-9]+$/ || m<0 || m>32){ print "[skip-pfx] badmask="m" raw="raw >> dbg; next }
+  n=split(ip,o,"."); if(n!=4){ print "[skip-pfx] badip="ip" raw="raw >> dbg; next }
+  ok=1
+  for(i=1;i<=4;i++){ if(o[i]!~/^[0-9]+$/ || o[i]<0 || o[i]>255){ ok=0; break } }
+  if(!ok){ print "[skip-pfx] invalidip="ip" raw="raw >> dbg; next }
+  if(length(ip)>0 && length(m)>0) print ip "/" m
+}' "$ENRICHED" | sort -u > "$LIST_PFX"
+
+# ---- ASN mode
 EX_RE="^($(echo "$ASN_EXCLUDE_CC" | sed 's/,/|/g'))$"
 QUAL_TXT="$OUTDIR/asn_qualifying.txt"; : > "$QUAL_TXT"
-awk -F',' -v minip="$ASN_MIN_IPS" -v minpf="$ASN_MIN_PREFIXES" -v exre="$EX_RE" '
-  NR==1 { next }
-  $2 ~ /^[0-9]+$/ && $4 ~ /\/[0-9]+$/ {
-    asn=$2; asname=$3; pfx=$4; cc=$5
-    gsub(/^[ \t]+|[ \t]+$/, "", asname)
-    ipcnt[asn]++
-    pref[asn "|" pfx]=1
-    if (cc ~ exre) excl[asn]=1
-    name[asn]=asname
+
+awk -v FS="$SEP_RE" \
+    -v fmt="$FORMAT" \
+    -v dbg="$DEBUG_LOG" \
+    -v minip="$ASN_MIN_IPS" \
+    -v minpf="$ASN_MIN_PREFIXES" \
+    -v exre="$EX_RE" '
+FNR==1 { next }
+{
+  raw=$0
+
+  # Correct field mapping based on format (do NOT test FS string)
+  if(fmt=="pipe"){
+    asn=$1; ip=$2; pfx=$3; cc=$4; asname=$7
+  } else {
+    ip=$1; asn=$2; asname=$3; pfx=$4; cc=$5
   }
-  END {
-    for (a in ipcnt) {
-      pf=0
-      for (k in pref) { split(k,t,"|"); if (t[1]==a) pf++ }
-      if (ipcnt[a] >= minip && pf >= minpf && !(a in excl)) {
-        printf "ASN|%s|%s|ip=%d|pf=%d\n", a, name[a], ipcnt[a], pf
-        for (k in pref) { split(k,t,"|"); if (t[1]==a) printf "PFX|%s\n", t[2] }
-      }
+
+  # --- Normalize ASN
+  asn_raw = asn
+  gsub(/\xef\xbb\xbf|\xc2\xa0|\xe2\x80[\x8b\x8c]|\r/, "", asn)
+  gsub(/^[[:space:]]+|[[:space:]]+$/, "", asn)
+  gsub(/[[:space:]]+/, "", asn)
+  if (asn !~ /^[0-9]+$/) { print "[skip-asn] badasn_raw=" asn_raw " asn_norm=" asn " raw=" raw >> dbg; next }
+
+  # --- Normalize prefix and AS name
+  gsub(/\xef\xbb\xbf|\xc2\xa0|\xe2\x80[\x8b\x8c]|\r/, "", pfx)
+  gsub(/[[:space:]]+/, "", pfx)
+  gsub(/\xef\xbb\xbf|\xc2\xa0|\xe2\x80[\x8b\x8c]|\r/, "", asname)
+  gsub(/[[:space:]]+/, " ", asname)
+  gsub(/^[[:space:]]+|[[:space:]]+$/, "", asname)
+
+  # --- Validate IP
+  s=ip; gsub(/[[:space:]]+/, "", s)
+  n=split(s, o, "."); ok=1
+  if(n!=4){ print "[skip-asn-ip] badipcol=" ip " raw=" raw >> dbg; next }
+  for(i=1;i<=4;i++){ if(o[i]!~/^[0-9]+$/ || o[i]<0 || o[i]>255){ ok=0; break } }
+  if(!ok){ print "[skip-asn-ip] invalid=" ip " raw=" raw >> dbg; next }
+
+  # --- Validate prefix
+  if(split(pfx, b, "/")!=2){ print "[skip-asn-pfx] badpfx=" pfx " raw=" raw >> dbg; next }
+  m=b[2]
+  if(m !~ /^[0-9]+$/ || m<0 || m>32){ print "[skip-asn-pfx] badmask=" m " raw=" raw >> dbg; next }
+
+  # --- Exclude country code
+  if(cc ~ exre){ print "[skip-asn] exclude-cc=" cc " asn=" asn " raw=" raw >> dbg; next }
+
+  # --- Accumulate counts
+  ipcnt[asn]++
+  pref[asn "|" pfx]=1
+  name[asn]=asname
+}
+END{
+  for(a in ipcnt){
+    pf=0
+    for(k in pref){ split(k,t,"|"); if(t[1]==a) pf++ }
+    if(ipcnt[a] >= minip && pf >= minpf){
+      printf "ASN|%s|%s|ip=%d|pf=%d\n", a, name[a], ipcnt[a], pf
+      for(k in pref){ split(k,t,"|"); if(t[1]==a) print "PFX|" t[2] }
+    } else {
+      print "[skip-asn-threshold] asn=" a " ips=" ipcnt[a] " pf=" pf >> dbg
     }
-  }' "$ENRICHED" > "$QUAL_TXT"
+  }
+}' "$ENRICHED" > "$QUAL_TXT"
 
 awk -F'|' '$1=="PFX"{print $2}' "$QUAL_TXT" | sort -u > "$LIST_ASN_PFX"
 
+# Summaries + previews
+echo "[dbg] Counts: IPs=$(wc -l < "$LIST_IPS")  PFX=$(wc -l < "$LIST_PFX")  ASN_PFX=$(wc -l < "$LIST_ASN_PFX")" >> "$DEBUG_LOG"
+{
+  echo "[sample] IPs:"; head -n 5 "$LIST_IPS"
+  echo "[sample] Prefixes:"; head -n 5 "$LIST_PFX"
+  echo "[sample] ASN Prefixes:"; head -n 5 "$LIST_ASN_PFX"
+} >> "$DEBUG_LOG"
+
+  
+  
 # -------- 5) Build apply script from the lists only --------
 SET_NAME=""
 CMDS="$OUTDIR/apply_cmds.sh"

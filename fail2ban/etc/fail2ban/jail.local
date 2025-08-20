@@ -51,6 +51,7 @@ bantime   = 3600
 # Use with care: may catch legitimate clients if filter is too broad.
 
 [scraper-anthropic-spoof]
+enabled   = false
 filter    = scraper-anthropic-spoof
 logpath   = /var/log/nginx/*access.log
             /var/log/apache2/*access.log
